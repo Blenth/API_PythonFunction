@@ -175,3 +175,34 @@ def listar_produtos(token: str, db: Session = Depends(get_db)):
             "validade": p.validade
         })
     return res
+
+@router.post('/APISocket/{token}/adicionar_produto/nome/{nome}/preco/{preco}/volume/{volume}/validade/{validade}')
+def adicionar_produto(
+    token: str,
+    nome: str,
+    preco: float,
+    volume: str,
+    validade: str,
+    db: Session = Depends(get_db)
+):
+    qt = validar_token_rapido(db, token)
+    if not qt:
+        raise HTTPException(status_code=401, detail="Token rápido inválido ou expirado")
+
+    novo = Product(
+        nome=nome,
+        preco=preco,
+        volume=volume,
+        validade=validade
+    )
+
+    db.add(novo)
+    db.commit()
+    db.refresh(novo)
+
+    return {
+        "status": "ok",
+        "mensagem": "Produto cadastrado",
+        "id": novo.id,
+        "nome": novo.nome
+    }
