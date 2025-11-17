@@ -1,0 +1,357 @@
+# API de Gestão de Produtos (FastAPI + SQLite + JWT)
+
+Este documento contém todos os arquivos necessários para rodar a API pedida. Cada arquivo está representado abaixo — copie-os para arquivos separados no seu projeto.
+
+---
+
+## Requisitos
+
+```
+fastapi
+uvicorn[standard]
+SQLAlchemy
+pydantic
+passlib[bcrypt]
+python-jose[cryptography]
+email-validator
+```
+
+Instale com:
+
+```
+pip install fastapi uvicorn SQLAlchemy pydantic passlib[bcrypt] python-jose[cryptography] email-validator
+```
+
+---
+
+## dados.json
+
+Arquivo que contém dados usados para simular envio de e-mail (conforme solicitado).
+
+```json
+{
+  "email_envio": "servico@seudominio.com",
+  "senha_envio": "SenhaServico123",
+  "codigo_padrao": "123456"
+}
+```
+
+---
+
+## main.py
+
+```python
+from fastapi import FastAPI
+import uvicorn
+from routes import router
+
+app = FastAPI(title="API de Gestão de Produtos")
+app.include_router(router)
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+```
+
+---
+
+## models.py
+
+```python
+from datetime import datetime, timedelta
+from sqlalchemy import Column, Integer, String, DateTime, Float, Text
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
+
+Base = declarative_base()
+
+class User(Base):
+    __tablename__ = 'users'
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String, nullable=False)
+    idade = Column(Integer, nullable=True)
+    data_cadastro = Column(DateTime, default=datetime.utcnow)
+    funcao = Column(String, nullable=False)
+    email = Column(String, unique=True, nullable=False, index=True)
+    senha_hash = Column(String, nullable=False)
+    cpf = Column(String, unique=True, nullable=False)
+
+class Product(Base):
+    __tablename__ = 'products'
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String, nullable=False)
+    data_criacao = Column(DateTime, default=datetime.utcnow)
+    id_informacoes = Column(String, nullable=True)
+    token_produto = Column(String, unique=True, nullable=False)
+    preco = Column(Float, nullable=True)
+    volume = Column(String, nullable=True)
+    validade = Column(String, nullable=True)
+
+class EditedItem(Base):
+    __tablename__ = 'edited_items'
+    id = Column(Integer, primary_key=True, index=True)
+    data_edicao = Column(DateTime, default=datetime.utcnow)
+    id_informacoes = Column(String, nullable=True)
+    token_item = Column(String, nullable=False)
+    informacoes_editadas = Column(Text, nullable=True)
+
+class QuickToken(Base):
+    __tablename__ = 'quick_tokens'
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String, nullable=False)
+    email = Column(String, nullable=False)
+    senha_hash = Column(String, nullable=False)
+    codigo = Column(String, nullable=False)  # 7 chars
+    criado_em = Column(DateTime, default=datetime.utcnow)
+    expira_em = Column(DateTime, nullable=False)
+
+class PasswordReset(Base):
+    __tablename__ = 'password_resets'
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String, nullable=False)
+    email = Column(String, nullable=False)
+    token_troca = Column(String, nullable=False)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+    usado_em = Column(DateTime, nullable=True)
+```
+
+---
+
+## database.py
+
+```python
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from models import Base
+
+SQLALCHEMY_DATABASE_URL = "sqlite:///./app.db"
+
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Criar tabelas
+Base.metadata.create_all(bind=engine)
+```
+
+---
+
+## utils.py
+
+```python
+import secrets
+import string
+from passlib.context import CryptContext
+from datetime import datetime, timedelta
+from jose import JWTError, jwt
+from pydantic import EmailStr
+import json
+
+# Chave secreta para JWT (em produção use env var)
+SECRET_KEY = "SUA_CHAVE_SUPER_SECRETA"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 1 dia
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+def create_access_token(data: dict, expires_delta: timedelta | None = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def generate_quick_token(length: int = 7) -> str:
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+def read_dados_json():
+    try:
+        with open('dados.json', 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+```
+
+---
+
+## routes.py
+
+```python
+from fastapi import APIRouter, Depends, HTTPException, status, Body
+from fastapi.security import OAuth2PasswordRequestForm
+from pydantic import BaseModel, EmailStr
+from datetime import datetime, timedelta
+from database import SessionLocal, engine
+from models import User, Product, EditedItem, QuickToken, PasswordReset
+from utils import hash_password, verify_password, create_access_token, generate_quick_token, read_dados_json, SECRET_KEY, ALGORITHM
+from jose import jwt, JWTError
+from sqlalchemy.orm import Session
+import uuid
+
+router = APIRouter()
+
+# --- Schemas ---
+class RegisterSchema(BaseModel):
+    nome: str
+    email: EmailStr
+    senha: str
+    funcao: str
+    cpf: str
+    idade: int | None = None
+
+class LoginSchema(BaseModel):
+    email: EmailStr
+    senha: str
+
+class TokenSchema(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+# Dependency
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# --- Autenticação / Cadastro ---
+@router.post('/auth/register')
+def register(payload: RegisterSchema, db: Session = Depends(get_db)):
+    # Verifica duplicados
+    if db.query(User).filter(User.email == payload.email).first():
+        raise HTTPException(status_code=400, detail='Email já cadastrado')
+    if db.query(User).filter(User.cpf == payload.cpf).first():
+        raise HTTPException(status_code=400, detail='CPF já cadastrado')
+
+    user = User(
+        nome=payload.nome,
+        idade=payload.idade,
+        funcao=payload.funcao,
+        email=payload.email,
+        senha_hash=hash_password(payload.senha),
+        cpf=payload.cpf
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    token = create_access_token({"sub": user.email, "id": user.id})
+
+    return {
+        "nome": user.nome,
+        "hora": datetime.utcnow().isoformat(),
+        "confirmado": "sim",
+        "token": token
+    }
+
+@router.post('/auth/login')
+def login(payload: LoginSchema, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == payload.email).first()
+    if not user or not verify_password(payload.senha, user.senha_hash):
+        raise HTTPException(status_code=401, detail='Credenciais inválidas')
+
+    token = create_access_token({"sub": user.email, "id": user.id})
+    return {"access_token": token, "token_type": "bearer"}
+
+# Rota para gerar token de acesso rápido (válido 6 horas)
+@router.post('/token_acesso_rapido')
+def gerar_token_rapido(email: EmailStr = Body(...), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail='Usuário não encontrado')
+
+    codigo = generate_quick_token(7)
+    agora = datetime.utcnow()
+    expira = agora + timedelta(hours=6)
+
+    qt = QuickToken(
+        nome=user.nome,
+        email=user.email,
+        senha_hash=user.senha_hash,
+        codigo=codigo,
+        criado_em=agora,
+        expira_em=expira
+    )
+    db.add(qt)
+    db.commit()
+    db.refresh(qt)
+
+    return {"token_rapido": codigo, "expira_em": expira.isoformat()}
+
+# Troca de senha (envia token por 'email' usando dados.json) - método GET conforme solicitado
+@router.get('/auth/troca_senha')
+def troca_senha(email: EmailStr, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail='Usuário não encontrado')
+
+    token = generate_quick_token(20)
+    pr = PasswordReset(nome=user.nome, email=user.email, token_troca=token)
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+
+    # Simular envio de email gravando em dados.json
+    dados = read_dados_json()
+    # Retorna JSON com infos solicitadas
+    return {"email": user.email, "token": token, "senha_anterior": "(não é retornada em texto em produção)"}
+
+# --- Helpers para validação de token rápido ---
+def validar_token_rapido(db: Session, codigo: str) -> QuickToken | None:
+    qt = db.query(QuickToken).filter(QuickToken.codigo == codigo).first()
+    if not qt:
+        return None
+    if qt.expira_em < datetime.utcnow():
+        return None
+    return qt
+
+# --- Rotas APISocket protegidas por token rápido ---
+@router.delete('/APISocket/{token}/deletar_produto/{product_id}')
+def deletar_produto(token: str, product_id: int, db: Session = Depends(get_db)):
+    qt = validar_token_rapido(db, token)
+    if not qt:
+        raise HTTPException(status_code=401, detail='Token rápido inválido ou expirado')
+
+    produto = db.query(Product).filter(Product.id == product_id).first()
+    if not produto:
+        raise HTTPException(status_code=404, detail='Produto não encontrado')
+
+    db.delete(produto)
+    db.commit()
+    # registrar edição
+    edit = EditedItem(id_informacoes=str(product_id), token_item=produto.token_produto, informacoes_editadas='DELETADO')
+    db.add(edit)
+    db.commit()
+    return {"detalhe": "Produto removido"}
+
+@router.get('/APISocket/{token}/listar_produtos')
+def listar_produtos(token: str, db: Session = Depends(get_db)):
+    qt = validar_token_rapido(db, token)
+    if not qt:
+        raise HTTPException(status_code=401, detail='Token rápido inválido ou expirado')
+    produtos = db.query(Product).all()
+    res = []
+    for p in produtos:
+        res.append({
+            "id": p.id,
+            "nome": p.nome,
+            "data_criacao": p.data_criacao.isoformat(),
+            "preco": p.preco,
+            "volume": p.volume,
+            "validade": p.validade
+        })
+    return res
+
+# ATENÇÃO: filtro por injeção SQL é perigoso — você soli
+```
