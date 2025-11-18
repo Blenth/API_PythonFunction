@@ -11,9 +11,6 @@ router = APIRouter()
 from pydantic import BaseModel, EmailStr
 
 
-# ============================
-#        SCHEMAS
-# ============================
 
 class UserCreate(BaseModel):
     nome: str
@@ -28,10 +25,6 @@ class UserLogin(BaseModel):
     senha: str
 
 
-# ============================
-#        DATABASE
-# ============================
-
 def get_db():
     db = SessionLocal()
     try:
@@ -40,9 +33,6 @@ def get_db():
         db.close()
 
 
-# ============================
-#   TOKEN DE ACESSO RÁPIDO
-# ============================
 
 def validar_token_rapido(db: Session, codigo: str) -> QuickToken | None:
     qt = db.query(QuickToken).filter(QuickToken.codigo == codigo).first()
@@ -53,9 +43,6 @@ def validar_token_rapido(db: Session, codigo: str) -> QuickToken | None:
     return qt
 
 
-# ============================
-#         REGISTRO
-# ============================
 
 @router.post("/auth/register")
 def register(payload: UserCreate, db: Session = Depends(get_db)):
@@ -71,7 +58,7 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
         idade=payload.idade,
         funcao=payload.funcao,
         email=payload.email,
-        senha=payload.senha,   # ← senha agora é salva corretamente
+        senha=payload.senha,   
         cpf=payload.cpf
     )
 
@@ -86,10 +73,6 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
         "nome": user.nome
     }
 
-
-# ============================
-#           LOGIN
-# ============================
 
 @router.post("/auth/login")
 def login(payload: UserLogin, db: Session = Depends(get_db)):
@@ -106,10 +89,6 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
         "nome": user.nome
     }
 
-
-# ============================
-#     GERAR TOKEN RÁPIDO
-# ============================
 
 @router.post("/token_acesso_rapido")
 def gerar_token_rapido(email: str, db: Session = Depends(get_db)):
@@ -137,10 +116,6 @@ def gerar_token_rapido(email: str, db: Session = Depends(get_db)):
     return {"token": codigo, "expira_em": expira.isoformat()}
 
 
-# ============================
-#      ADICIONAR PRODUTO
-# ============================
-
 @router.post("/APISocket/{token}/adicionar_produto")
 def adicionar_produto(token: str, nome: str, preco: float, volume: str, validade: str, db: Session = Depends(get_db)):
 
@@ -162,9 +137,6 @@ def adicionar_produto(token: str, nome: str, preco: float, volume: str, validade
     return {"status": "ok", "id": novo.id, "token_produto": novo.token_produto}
 
 
-# ============================
-#        EDITAR PRODUTO
-# ============================
 
 @router.put("/APISocket/{token}/editar_produto/{product_id}")
 def editar_produto(token: str, product_id: int, nome: str | None = None,
@@ -200,10 +172,6 @@ def editar_produto(token: str, product_id: int, nome: str | None = None,
     return {"status": "ok", "mensagem": "Produto atualizado"}
 
 
-# ============================
-#      LISTAR PRODUTOS
-# ============================
-
 @router.get("/APISocket/{token}/listar_produtos")
 def listar_produtos(token: str, db: Session = Depends(get_db)):
 
@@ -221,9 +189,6 @@ def listar_produtos(token: str, db: Session = Depends(get_db)):
     } for p in produtos]
 
 
-# ============================
-#      DELETAR PRODUTO
-# ============================
 
 @router.delete("/APISocket/{token}/deletar_produto/{product_id}")
 def deletar_produto(token: str, product_id: int, db: Session = Depends(get_db)):

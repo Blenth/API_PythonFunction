@@ -11,7 +11,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     nome = Column(String, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
-    senha = Column(String, nullable=False)  # ← senha simples
+    senha = Column(String, nullable=False) 
     idade = Column(Integer, nullable=True)
     funcao = Column(String, nullable=True)
     cpf = Column(String, unique=True, nullable=True)
