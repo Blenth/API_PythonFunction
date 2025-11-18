@@ -16,4 +16,4 @@ python.exe -m pip install --upgrade pip
 pip install fastapi uvicorn SQLAlchemy pydantic passlib[argon2] python-jose[cryptography] email-validator
 
 
-"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjYXJsb3NAZW1haWwuY29tIiwiaWQiOjEsImV4cCI6MTc2MzQyMDQ1NH0.e9tF_19woD9CUciedWA3HRjVi2lUksBmfySo_X2d_mI
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjYXJsb3NAZW1haWwuY29tIiwiaWQiOjEsImV4cCI6MTc2MzQyMDQ1NH0.e9tF_19woD9CUciedWA3HRjVi2lUksBmfySo_X2d_mI

@@ -11,9 +11,9 @@ class User(Base):
     idade = Column(Integer, nullable=True)
     data_cadastro = Column(DateTime, default=datetime.utcnow)
     funcao = Column(String, nullable=False)
-    email = Column(String, unique=True, nullable=False, index=True)
-    senha_hash = Column(String, nullable=False)
+    email = Column(String, unique=True, nullable=False)
     cpf = Column(String, unique=True, nullable=False)
+
 
 class Product(Base):
     __tablename__ = 'products'
@@ -21,7 +21,7 @@ class Product(Base):
     nome = Column(String, nullable=False)
     data_criacao = Column(DateTime, default=datetime.utcnow)
     id_informacoes = Column(String, nullable=True)
-    token_produto = Column(String, unique=True, nullable=False)
+    token_produto = Column(String, unique=True, nullable=True)
     preco = Column(Float, nullable=True)
     volume = Column(String, nullable=True)
     validade = Column(String, nullable=True)
@@ -39,16 +39,6 @@ class QuickToken(Base):
     id = Column(Integer, primary_key=True, index=True)
     nome = Column(String, nullable=False)
     email = Column(String, nullable=False)
-    senha_hash = Column(String, nullable=False)
-    codigo = Column(String, nullable=False) 
+    codigo = Column(String, nullable=False)
     criado_em = Column(DateTime, default=datetime.utcnow)
     expira_em = Column(DateTime, nullable=False)
-
-class PasswordReset(Base):
-    __tablename__ = 'password_resets'
-    id = Column(Integer, primary_key=True, index=True)
-    nome = Column(String, nullable=False)
-    email = Column(String, nullable=False)
-    token_troca = Column(String, nullable=False)
-    criado_em = Column(DateTime, default=datetime.utcnow)
-    usado_em = Column(DateTime, nullable=True)
