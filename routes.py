@@ -4,23 +4,33 @@ from datetime import datetime, timedelta
 
 from database import SessionLocal
 from models import User, Product, EditedItem, QuickToken
-from utils import generate_code, read_dados_json
+from utils import generate_code
 
 router = APIRouter()
 
 from pydantic import BaseModel, EmailStr
 
-class RegisterSchema(BaseModel):
+
+# ============================
+#        SCHEMAS
+# ============================
+
+class UserCreate(BaseModel):
     nome: str
+    email: EmailStr
+    senha: str
     idade: int | None = None
-    funcao: str
-    email: EmailStr
-    cpf: str
+    funcao: str | None = None
+    cpf: str | None = None
 
-class LoginSchema(BaseModel):
+class UserLogin(BaseModel):
     email: EmailStr
-    cpf: str
+    senha: str
 
+
+# ============================
+#        DATABASE
+# ============================
 
 def get_db():
     db = SessionLocal()
@@ -28,6 +38,11 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+# ============================
+#   TOKEN DE ACESSO RÁPIDO
+# ============================
 
 def validar_token_rapido(db: Session, codigo: str) -> QuickToken | None:
     qt = db.query(QuickToken).filter(QuickToken.codigo == codigo).first()
@@ -37,13 +52,18 @@ def validar_token_rapido(db: Session, codigo: str) -> QuickToken | None:
         return None
     return qt
 
+
+# ============================
+#         REGISTRO
+# ============================
+
 @router.post("/auth/register")
-def register(payload: RegisterSchema, db: Session = Depends(get_db)):
+def register(payload: UserCreate, db: Session = Depends(get_db)):
 
     if db.query(User).filter(User.email == payload.email).first():
         raise HTTPException(status_code=400, detail="Email já cadastrado")
 
-    if db.query(User).filter(User.cpf == payload.cpf).first():
+    if payload.cpf and db.query(User).filter(User.cpf == payload.cpf).first():
         raise HTTPException(status_code=400, detail="CPF já cadastrado")
 
     user = User(
@@ -51,6 +71,7 @@ def register(payload: RegisterSchema, db: Session = Depends(get_db)):
         idade=payload.idade,
         funcao=payload.funcao,
         email=payload.email,
+        senha=payload.senha,   # ← senha agora é salva corretamente
         cpf=payload.cpf
     )
 
@@ -65,15 +86,17 @@ def register(payload: RegisterSchema, db: Session = Depends(get_db)):
         "nome": user.nome
     }
 
+
+# ============================
+#           LOGIN
+# ============================
+
 @router.post("/auth/login")
-def login(payload: LoginSchema, db: Session = Depends(get_db)):
+def login(payload: UserLogin, db: Session = Depends(get_db)):
 
-    user = db.query(User).filter(
-        User.email == payload.email,
-        User.cpf == payload.cpf
-    ).first()
+    user = db.query(User).filter(User.email == payload.email).first()
 
-    if not user:
+    if not user or user.senha != payload.senha:
         raise HTTPException(status_code=401, detail="Credenciais inválidas")
 
     return {
@@ -84,6 +107,9 @@ def login(payload: LoginSchema, db: Session = Depends(get_db)):
     }
 
 
+# ============================
+#     GERAR TOKEN RÁPIDO
+# ============================
 
 @router.post("/token_acesso_rapido")
 def gerar_token_rapido(email: str, db: Session = Depends(get_db)):
@@ -111,6 +137,10 @@ def gerar_token_rapido(email: str, db: Session = Depends(get_db)):
     return {"token": codigo, "expira_em": expira.isoformat()}
 
 
+# ============================
+#      ADICIONAR PRODUTO
+# ============================
+
 @router.post("/APISocket/{token}/adicionar_produto")
 def adicionar_produto(token: str, nome: str, preco: float, volume: str, validade: str, db: Session = Depends(get_db)):
 
@@ -132,10 +162,14 @@ def adicionar_produto(token: str, nome: str, preco: float, volume: str, validade
     return {"status": "ok", "id": novo.id, "token_produto": novo.token_produto}
 
 
+# ============================
+#        EDITAR PRODUTO
+# ============================
 
 @router.put("/APISocket/{token}/editar_produto/{product_id}")
-def editar_produto(token: str, product_id: int, nome: str | None = None, preco: float | None = None,
-                   volume: str | None = None, validade: str | None = None, db: Session = Depends(get_db)):
+def editar_produto(token: str, product_id: int, nome: str | None = None,
+                   preco: float | None = None, volume: str | None = None,
+                   validade: str | None = None, db: Session = Depends(get_db)):
 
     if not validar_token_rapido(db, token):
         raise HTTPException(status_code=401, detail="Token inválido ou expirado")
@@ -144,7 +178,7 @@ def editar_produto(token: str, product_id: int, nome: str | None = None, preco: 
     if not produto:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
 
-    antes = produto.__dict__.copy()  
+    antes = produto.__dict__.copy()
 
     if nome: produto.nome = nome
     if preco: produto.preco = preco
@@ -166,6 +200,9 @@ def editar_produto(token: str, product_id: int, nome: str | None = None, preco: 
     return {"status": "ok", "mensagem": "Produto atualizado"}
 
 
+# ============================
+#      LISTAR PRODUTOS
+# ============================
 
 @router.get("/APISocket/{token}/listar_produtos")
 def listar_produtos(token: str, db: Session = Depends(get_db)):
@@ -184,6 +221,9 @@ def listar_produtos(token: str, db: Session = Depends(get_db)):
     } for p in produtos]
 
 
+# ============================
+#      DELETAR PRODUTO
+# ============================
 
 @router.delete("/APISocket/{token}/deletar_produto/{product_id}")
 def deletar_produto(token: str, product_id: int, db: Session = Depends(get_db)):
