@@ -116,8 +116,15 @@ def gerar_token_rapido(email: str, db: Session = Depends(get_db)):
     return {"token": codigo, "expira_em": expira.isoformat()}
 
 
-@router.post("/APISocket/{token}/adicionar_produto")
-def adicionar_produto(token: str, nome: str, preco: float, volume: str, validade: str, db: Session = Depends(get_db)):
+@router.get("/APISocket/{token}/adicionar_produto/{nome}/{preco}/{volume}/{validade}")
+def adicionar_produto(
+    token: str,
+    nome: str,
+    preco: float,
+    volume: str,
+    validade: str,
+    db: Session = Depends(get_db)
+):
 
     if not validar_token_rapido(db, token):
         raise HTTPException(status_code=401, detail="Token inválido ou expirado")
@@ -137,8 +144,7 @@ def adicionar_produto(token: str, nome: str, preco: float, volume: str, validade
     return {"status": "ok", "id": novo.id, "token_produto": novo.token_produto}
 
 
-
-@router.put("/APISocket/{token}/editar_produto/{product_id}")
+@router.get("/APISocket/{token}/editar_produto/{product_id}")
 def editar_produto(token: str, product_id: int, nome: str | None = None,
                    preco: float | None = None, volume: str | None = None,
                    validade: str | None = None, db: Session = Depends(get_db)):
@@ -211,3 +217,4 @@ def deletar_produto(token: str, product_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     return {"status": "ok", "mensagem": "Produto removido"}
+
