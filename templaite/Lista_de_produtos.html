@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ title }}</title>
+    <style>
+        table { width: 100%; }
+        td { padding: 10px; }
+        .card {
+            border: 1px solid #ccc;
+            padding: 15px;
+            text-align: center;
+            border-radius: 8px;
+        }
+        img { width: 120px; }
+    </style>
+</head>
+<body>
+
+<h1>{{ title }}</h1>
+
+<table>
+    <tr>
+        {% for p in produtos %}
+            <td>
+                <div class="card">
+                    <img src="{{ p.imagem }}" alt="{{ p.nome }}">
+                    <h3>{{ p.nome }}</h3>
+                    <p>{{ p.quantidade }} Und</p>
+                    <div class="botoes">
+                        <button class="info">INFO</button>
+                        <button onclick="alert('Controle de {{ p.nome }}')" class="controlar">CONTROLAR</button>
+                    </div>
+                </div>
+            </td>
+
+            {% if loop.index % 5 == 0 %}
+                </tr><tr>
+            {% endif %}
+        {% endfor %}
+    </tr>
+</table>
+
+</body>
+</html>

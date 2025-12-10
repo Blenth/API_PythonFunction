@@ -1,10 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
-
+from fastapi.templating import Jinja2Templates
 from database import SessionLocal
 from models import User, Product, EditedItem, QuickToken
 from utils import generate_code
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 
 router = APIRouter()
 
@@ -116,6 +119,9 @@ def gerar_token_rapido(email: str, db: Session = Depends(get_db)):
     return {"token": codigo, "expira_em": expira.isoformat()}
 
 
+
+
+
 @router.get("/APISocket/{token}/adicionar_produto/{nome}/{preco}/{volume}/{validade}")
 def adicionar_produto(
     token: str,
@@ -218,3 +224,39 @@ def deletar_produto(token: str, product_id: int, db: Session = Depends(get_db)):
 
     return {"status": "ok", "mensagem": "Produto removido"}
 
+#___________________________________________________________________________________________
+
+import requests
+
+def buscar_produtos():
+    url = "https://dummyjson.com/products"
+    response = requests.get(url)
+    data = response.json()["products"]
+
+    campos = ["title", "thumbnail", "stock"]
+
+    produtos_filtrados = []
+    for p in data:
+        produtos_filtrados.append({
+            "nome": p["title"],
+            "imagem": p["thumbnail"],
+            "quantidade": p["stock"],
+        })
+
+    return produtos_filtrados
+
+
+templates = Jinja2Templates(directory="templaite")
+
+
+@router.get("/", response_class=HTMLResponse)
+async def pagina_lista_produtos(request: Request):
+    produtos = buscar_produtos()
+    return templates.TemplateResponse(
+        "Lista_de_produtos.html",
+        {
+            "request": request,
+            "title": "Lista de Produtos",
+            "produtos": produtos
+        }
+    )
