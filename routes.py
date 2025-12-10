@@ -5,7 +5,7 @@ from fastapi.templating import Jinja2Templates
 from database import SessionLocal
 from models import User, Product, EditedItem, QuickToken
 from utils import generate_code
-from fastapi import FastAPI, Request
+from fastapi import Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
@@ -224,7 +224,9 @@ def deletar_produto(token: str, product_id: int, db: Session = Depends(get_db)):
 
     return {"status": "ok", "mensagem": "Produto removido"}
 
-#___________________________________________________________________________________________
+#============================================================================================================
+#============================================================================================================
+#============================================================================================================
 
 import requests
 
